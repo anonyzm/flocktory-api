@@ -1,10 +1,12 @@
-var express = require('express');
-var bodyParser = require('body-parser');
-var cors = require('cors');
-const {flocktoryInit, flocktoryPushAttach} = require("./floctory/flocktory");
-const {httpOK, httpError} = require("./helpers/http");
+const express = require('express');
+const bearerToken = require('express-bearer-token');
+const {body, validationResult} = require('express-validator');
+const bodyParser = require('body-parser');
+const cors = require('cors');
 
-const PORT = 3001;
+const config = require('./config/constants');
+const {FlocktoryInit, FlocktoryPushAttach, FlocktorySetCustomMeta} = require("./floctory/flocktory");
+const {httpOK, httpError, checkAuth} = require("./helpers/http");
 
 var app = express();
 
@@ -19,47 +21,34 @@ const corsOptions = {
     "methods": "GET,HEAD,PUT,PATCH,POST,DELETE",
 };
 app.use(cors(corsOptions));
+app.use(bearerToken());
 
 /**
- * Index
+ * Token init
  */
-app.get('/', function (req, res) {
-    httpOK(res, {
-        'title': 'Floctory API v1',
-        'endpoints': {
-            '/init': 'Application init',
-            '/push-init': 'Attaching push session ID'
+app.post('/init',
+    checkAuth,
+    body('token').not().isEmpty().trim(),
+    function (req, res) {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return httpError(res, errors.array());
         }
-    });
-});
 
-/**
- * App init
- */
-app.post('/init', function (req, res) {
-    const params = req.body;
-    console.log(params)
-    if (!params.siteId) {
-        return httpError(res, 'You must specify following params: `siteId`');
-    }
-    flocktoryInit(params.siteId).then((data) => {
-        httpOK(res, data);
+        const token = req.body.token;
+        // Flocktory session init
+        FlocktoryInit(config.SITE_ID).then((data) => {
+            const sessionId = data['site-session-id'];
+            // Flocktory attach push token
+            FlocktoryPushAttach(token, config.SITE_ID, sessionId, config.SENDER_ID).then((data) => {
+                // Set Flocktory crm_id = token
+                FlocktorySetCustomMeta(config.SITE_ID, sessionId, token).then((data) => {
+                    httpOK(res, data);
+                });
+            });
+        });
     });
-});
 
-/**
- * Push attach to session
- */
-app.post('/push-init', function (req, res) {
-    const params = req.body;
-    if (!params.token || !params.siteId || !params.sessionId || !params.senderId) {
-        return httpError(res, 'You must specify following params: `token`, `siteId`, `sessionId`, `senderId`');
-    }
-    flocktoryPushAttach(params.token, params.siteId, params.sessionId, params.senderId).then((data) => {
-        httpOK(res, data);
-    });
-});
-
-app.listen(PORT, function () {
-    console.log('Example app listening on port ' + PORT + '!');
+app.listen(config.PORT, function () {
+    console.log('App listening on port ' + config.PORT);
 });

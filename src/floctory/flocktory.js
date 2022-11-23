@@ -1,11 +1,11 @@
-var axios = require('axios');
+const axios = require('axios');
+const config = require('../config/constants');
 
 const FLOCKTORY_BASE_URL = 'https://api.flocktory.com/';
-const FLOCKTORY_DEBUG = true;
 
-const apiCall = (endpoint, data) => {
-    const url = FLOCKTORY_BASE_URL + endpoint; // + "?body=" + JSON.stringify(data);
-    if (FLOCKTORY_DEBUG) {
+const apiCall = (baseUrl, endpoint, data, params = {}) => {
+    const url = FLOCKTORY_BASE_URL + endpoint;
+    if (config.DEBUG) {
         console.log("Request URL: " + url)
         console.log("Request Data:")
         console.log(data)
@@ -13,11 +13,13 @@ const apiCall = (endpoint, data) => {
     return axios.get(url, {
         method: 'get',
         params: {
-            body: JSON.stringify(data)
-        }
+            body: JSON.stringify(data),
+            ...params
+        },
+        headers: headers
     })
         .then((response) => new Promise((resolve) => {
-            if (FLOCKTORY_DEBUG) {
+            if (config.DEBUG) {
                 console.log("Response Data: ")
                 console.log(response.data)
             }
@@ -28,13 +30,28 @@ const apiCall = (endpoint, data) => {
         });
 }
 
-const flocktoryInit = (siteId) =>
-    apiCall('u_shaman/setup-api', {
+/**
+ * Floctory session initialization
+ * @param siteId
+ * @returns {Promise<unknown>}
+ * @constructor
+ */
+const FlocktoryInit = (siteId) =>
+    apiCall(FLOCKTORY_BASE_URL, 'u_shaman/setup-api', {
         "siteId": siteId
     });
 
-const flocktoryPushAttach = (token, siteId, sessionId, senderId) =>
-    apiCall('u_flockman/attach-push-to-session', {
+/**
+ * Attaching token
+ * @param token
+ * @param siteId
+ * @param sessionId
+ * @param senderId
+ * @returns {Promise<unknown>}
+ * @constructor
+ */
+const FlocktoryPushAttach = (token, siteId, sessionId, senderId) =>
+    apiCall(FLOCKTORY_BASE_URL, 'u_flockman/attach-push-to-session', {
         "from-mobile-app": true,
         "platform": "firebase",
         "os": "android",
@@ -46,4 +63,23 @@ const flocktoryPushAttach = (token, siteId, sessionId, senderId) =>
         "site-session-id": sessionId
     });
 
-module.exports = {flocktoryInit, flocktoryPushAttach};
+/**
+ * Setting custom crm_id
+ * @param siteId
+ * @param sessionId
+ * @param crmId
+ * @returns {Promise<unknown>}
+ * @constructor
+ */
+const FlocktorySetCustomMeta = (siteId, sessionId, crmId) =>
+    apiCall(FLOCKTORY_BASE_URL, 'u_flockman/set-profile-custom-meta.js', {
+        "site-id": siteId,
+        "meta": {
+            "crm_id": crmId
+        },
+        "site-session-id": sessionId
+    }, {
+        callback: "flock_jsonp"
+    });
+
+module.exports = {FlocktoryInit, FlocktoryPushAttach, FlocktorySetCustomMeta};
